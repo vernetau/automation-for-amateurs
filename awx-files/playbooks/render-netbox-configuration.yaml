@@ -1,0 +1,85 @@
+---
+# This playbook is designed to check the Netbox rendered config against the
+# GitHub standard config. The playbook connects to Netbox and renders the configurations.
+# A python script is then called. This script 'netbox-workflow.py' works by pulling the configs
+# from the master branch of the repo. A new branch is created and the rendered
+# config is pushed to it. If any changes on this branch are detected, then there is a discrepancy.
+# In this scenario, the new branch is pushed to GitHub and a PR is raised for review. If a branch/PR
+# already exists, then the commit is added to the existing branch. 
+
+# Inputs:
+# - nodes [array]
+
+- name: Check Netbox for device updates against GitHub standard
+  connection: local
+  hosts: localhost
+  gather_facts: false
+
+  tasks:
+    - name: Get netbox device ids
+      uri:
+        url: "{{ lookup('env', 'NETBOX_API') }}/api/dcim/devices/?status=active&manufacturer=juniper"
+        method: GET
+        headers:
+          Authorization: "Token {{ lookup('env', 'NETBOX_TOKEN') }}"
+          Accept: "application/json"
+        return_content: yes
+        body_format: json
+        status_code: [ 200, 201 ]
+        validate_certs: false # Change this for production
+      register: netbox_devices
+
+    - name: Format device information (all nodes)
+      set_fact:
+        netbox_device: >-
+          {%- set netbox_device = [] -%}
+          {%- for device in netbox_devices.json.results -%}
+            {%- set tmp = dict() -%}
+            {%- set _dummy = tmp.update({'id':device.id}) -%}
+            {%- set _dummy = tmp.update({'name':device.name}) -%}
+            {%- if netbox_device.append(tmp) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ netbox_device }}
+      when: nodes == 'all'
+
+    - name: Format device information (select nodes)
+      set_fact:
+        netbox_device: >-
+          {%- set netbox_device = [] -%}
+          {%- for device in netbox_devices.json.results -%}
+            {%- if device.name in nodes -%}
+              {%- set tmp = dict() -%}
+              {%- set _dummy = tmp.update({'id':device.id}) -%}
+              {%- set _dummy = tmp.update({'name':device.name}) -%}
+              {%- if netbox_device.append(tmp) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ netbox_device }}
+      when: nodes != 'all'
+
+    - name: Check we have a valid device
+      fail:
+        msg: "No matching devices found in Netbox"
+      when: netbox_device == []
+
+    - name: Execute the netbox-workflow.py
+      command:
+        argv:
+          - python3
+          - /runner/project/awx-files/python-scripts/netbox-workflow.py
+          - -d
+          - "{{ netbox_device | to_json }}"
+      environment:
+        GIT_USERNAME: "{{ lookup('env', 'GIT_USERNAME') }}"
+        GIT_EMAIL: "{{ lookup('env', 'GIT_EMAIL') }}"
+        GIT_TOKEN: "{{ lookup('env', 'GIT_TOKEN') }}"
+        GIT_ORGANIZATION: "{{ lookup('env', 'GIT_ORGANIZATION') }}"
+        GIT_REPOSITORY: "{{ lookup('env', 'GIT_REPOSITORY') }}"
+        NETBOX_URL: "{{ lookup('env', 'NETBOX_API') }}"
+        NETBOX_API_TOKEN: "{{ lookup('env', 'NETBOX_TOKEN') }}"
+      register: script_output
+      ignore_errors: true
+      changed_when: script_output.rc == 2
+      failed_when: script_output.rc not in [0, 2]

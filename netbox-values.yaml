@@ -1,0 +1,9 @@
+# Overrides for the official netbox/netbox chart.
+loginRequired: true
+powerFeedDefaultVoltage: 240
+
+# Below is required to allow for scripts to be added from the data source
+scriptsPersistence:
+  enabled: true
+  size: 1Gi # adjust as needed
+  accessMode: ReadWriteOnce

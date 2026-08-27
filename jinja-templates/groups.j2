@@ -1,0 +1,52 @@
+{# Determine if there is a provisioned fxp on the device #}
+{%- set fxp_found = device.interfaces.filter(name__icontains='fxp', enabled=True).exists() -%}
+{%- if fxp_found == true -%}
+    {%- set fxp_int = device.interfaces.filter(name="fxp0.0").first() -%}
+    {%- set fxp_address = fxp_int.ip_addresses.first() -%}
+{%- else -%}
+    {%- set fxp_address = false -%}
+{%- endif -%}
+{# Start configuration template #}
+/************************ {{ device.name }} ************************/
+groups {
+    re0 {
+        system {
+            host-name {{ device.name }};
+        }
+        {% if fxp_found == true %}
+        interfaces {
+            fxp0 {
+                unit 0 {
+                    {% if fxp_address != false %}
+                    family inet {
+                        address {{ fxp_address }} {
+                            master-only;
+                        }
+                    }
+                    {% endif %}
+                }
+            }
+        }
+        {% endif %}
+    }
+    re1 {
+        system {
+            host-name {{ device.name }};
+        }
+        {% if fxp_found == true %}
+        interfaces {
+            fxp0 {
+                unit 0 {
+                    {% if fxp_address != false %}
+                    family inet {
+                        address {{ fxp_address }} {
+                            master-only;
+                        }
+                    }
+                    {% endif %}
+                }
+            }
+        }
+        {% endif %}
+    }
+}

@@ -1,0 +1,76 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: netbox-seed
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 30
+
+  template:
+    metadata:
+      labels:
+        app: netbox-seed
+
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: netbox-seed
+          image: python:3.12-slim
+
+          env:
+            - name: NETBOX_URL
+              value: "http://netbox:80"
+
+            - name: NETBOX_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: netbox-api
+                  key: token
+
+            - name: GIT_ORGANIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: organization
+
+            - name: GIT_REPOSITORY
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: repository
+
+            - name: GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: username
+
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: token
+
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              echo "Installing Python dependencies..."
+              pip install --quiet pynetbox pyyaml
+
+              echo "Running seed script..."
+              python /netbox-seed/seed.py
+
+              echo "NetBox seed completed successfully."
+
+          volumeMounts:
+            - name: seed
+              mountPath: /netbox-seed
+
+      volumes:
+        - name: seed
+          configMap:
+            name: netbox-seed

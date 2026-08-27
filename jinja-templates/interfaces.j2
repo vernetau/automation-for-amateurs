@@ -1,0 +1,180 @@
+{%- set found_interfaces = dict() -%}
+{# Lets first loop through all the interfaces on the device. #}
+{%- for interface in device.interfaces.all() -%}
+    {%- set tmp = dict() -%}
+    {%- set _dummy = tmp.update({'name':interface.name}) -%}
+    {%- set _dummy = tmp.update({'description':interface.description}) -%}
+    {%- set _dummy = tmp.update({'units':[]}) -%}
+    {# Physical interfaces #}
+    {%- if interface.parent is none -%}
+        {%- set _dummy = tmp.update({'name':interface.name}) -%}
+        {%- if interface.description is defined and interface.description is not none -%}
+            {%- set _dummy = tmp.update({'description':interface.description}) -%}
+        {%- endif -%}
+        {%- set _dummy = tmp.update({'enabled':interface.enabled}) -%}
+        {%- if interface.mtu is defined and interface.mtu is not none -%}
+            {%- set _dummy = tmp.update({'mtu':interface.mtu}) -%}
+        {%- endif -%}
+        {# Need to determine if this interface is already defined. This will happen if the units are added first. If this happens, we dont want to overwrite it #}
+        {%- if found_interfaces[interface.name] is defined -%}
+            {%- set _dummy = tmp.update({'units':found_interfaces[interface.name]['units']}) -%}
+        {%- endif -%}
+        {%- set _dummy = found_interfaces.update({interface.name:tmp}) -%}
+    {# Virtual interfaces #}
+    {%- else -%}
+        {%- set unit = dict() -%}
+        {%- set list = interface.name.split('.') -%}
+        {%- set _dummy = unit.update({'unit':list[1]}) -%}
+        {%- set _dummy = unit.update({'enabled':interface.enabled}) -%}
+        {%- if interface.description is defined and interface.description is not none -%}
+            {%- set _dummy = unit.update({'description':interface.description}) -%}
+        {%- endif -%}
+        {# Determine if we have any ip addresses defined on the interface #}
+        {%- set ip4_tmp = [] -%}
+        {%- set ip6_tmp = [] -%}
+        {%- for ip in interface.ip_addresses.all() -%}
+            {%- if ip.family == 4 -%}
+                {%- if ip4_tmp.append(ip.address) -%}
+                {%- endif -%}
+            {%- elif ip.family == 6 -%}
+                {%- if ip6_tmp.append(ip.address) -%}
+                {%- endif -%}
+            {%- endif -%}
+        {%- endfor -%}
+        {%- if ip4_tmp|length > 0 -%}
+            {%- set _dummy = unit.update({'inet':ip4_tmp}) -%}
+        {%- endif -%}
+        {%- if ip6_tmp|length > 0 -%}
+            {%- set _dummy = unit.update({'inet6':ip6_tmp}) -%}
+        {%- endif -%}
+        {# If the parent interface does not exist in the array, add it in and append this unit #}
+        {%- if found_interfaces[interface.parent.name] is not defined -%}
+            {%- set _dummy = found_interfaces.update({interface.parent.name:dict()}) -%}
+            {%- set _dummy = found_interfaces[interface.parent.name].update({'units':[]}) -%}
+        {%- endif -%}
+        {# Check if assigned to VPLS #}
+        {%- if interface.l2vpn_termination is not none -%}
+            {%- set _dummy = unit.update({'found_vpls': true}) -%}
+        {%- else -%}
+            {%- set _dummy = unit.update({'found_vpls': false}) -%}
+        {%- endif -%}
+        {%- if found_interfaces[interface.parent.name]['units'].append(unit) -%}
+        {%- endif -%}
+    {%- endif -%}
+{%- endfor -%}
+{# Start configuration template #}
+interfaces {
+    {% for this_int in found_interfaces %}
+    {% set interface = found_interfaces[this_int] %}
+    {# Loopback interfaces #}
+    {% if 'lo0' in interface.name %}
+    {{ interface.name }} {
+        {% if interface.enabled == false %}
+        disable;
+        {% endif %}
+        {% for unit in interface.units %}
+        unit {{ unit.unit }} {
+            {% if unit.description is defined and unit.description is not none %}
+            {% if ' ' in unit.description or  '(' in unit.description or ')' in unit.description %}
+            description "{{ unit.description }}";
+            {% elif unit.description == '' %}
+            description "";
+            {% else %}
+            description {{ unit.description }};
+            {% endif %}
+            {% endif %}
+            {% if unit.inet is defined and unit.inet[0] is not none and unit.inet[0] != '' %}
+            family inet {
+                address {{ unit.inet[0] }};
+            }
+            {% else %}
+            family inet;
+            {% endif %}
+        }
+        {% endfor %}
+    }
+    {# fxp interfaces #}
+    {% elif 'fxp' in interface.name %}
+    {{ interface.name }} {
+        {% if interface.enabled == false %}
+        disable;
+        {% endif %}
+        {% for unit in interface.units %}
+        unit {{ unit.unit }} {
+            {% if unit.description is defined and unit.description is not none and unit.description != '' %}
+            {% if ' ' in unit.description or  '(' in unit.description or ')' in unit.description %}
+            description "{{ unit.description }}";
+            {% elif unit.description == '' %}
+            description "";
+            {% else %}
+            description {{ unit.description }};
+            {% endif %}
+            {% endif %}
+            {% if unit.inet is defined and unit.inet[0] is not none and unit.inet[0] != '' %}
+            family inet {
+                address {{ unit.inet[0] }};
+            }
+            {% else %}
+            family inet;
+            {% endif %}
+        }
+        {% endfor %}
+    }
+    {% else %}
+    {# All other interfaces #}
+    {{ interface.name }} {
+        {% if interface.description is defined and interface.description is not none and interface.description != "" %}
+        {% if ' ' in interface.description or  '(' in interface.description or ')' in interface.description %}
+        description "{{ interface.description }}";
+        {% elif interface.description == '' %}
+        description "";
+        {% else %}
+        description {{ interface.description }};
+        {% endif %}
+        {% endif %}
+        {% if interface.enabled == false %}
+        disable;
+        {% endif %}
+        {% if interface.mtu is defined %}
+        mtu {{ interface.mtu }};
+        {% endif %}
+        {# Loop through each unit on the interface #}
+        {% for unit in interface.units %}
+        unit {{ unit.unit }} {
+            {% if unit.enabled == false %}
+            disable;
+            {% endif %}
+            {% if unit.description is defined and unit.description is not none and unit.description != "" %}
+            {% if ' ' in unit.description or  '(' in unit.description or ')' in unit.description %}
+            description "{{ unit.description }}";
+            {% elif unit.description == '' %}
+            description "";
+            {% else %}
+            description {{ unit.description }};
+            {% endif %}
+            {% endif %}
+            {# Check for any ipv4 addresses defined #}
+            {% if unit.inet is defined and unit.inet[0] != '' and unit.inet[0] is not none %}
+            family inet {
+                {% for this_ip in unit.inet %}
+                address {{ this_ip }};
+                {% endfor %}
+            }
+            {% endif %}
+            {# Check for any ipv6 addresses defined #}
+            {% if (unit.inet6 != '' and unit.inet6 is not none and unit.inet6 is defined) or unit.prefix %}
+            family inet6 {
+                {% for this_ip in unit.inet6 %}
+                address {{ this_ip }};
+                {% endfor %}
+            }
+            {% endif %}
+            {% if unit.found_vpls == true %}
+            family vpls;
+            {% endif %}
+        }
+        {% endfor %}
+    }
+    {% endif %}
+    {% endfor %}
+}

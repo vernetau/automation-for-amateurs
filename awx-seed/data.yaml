@@ -1,0 +1,29 @@
+organizations:
+  - name: Automation-For-Amateurs
+    description: Example organization
+
+projects:
+  - name: Network Automation
+    organization: Automation-For-Amateurs
+    description: Network automation playbooks and scripts
+    scm_type: git
+    scm_branch: master
+    credentials: GitHub
+
+inventories:
+  - name: Netbox Devices
+    organization: Automation-For-Amateurs
+    description: Active devices within Netbox
+    project: Network Automation
+    inventory_file: awx-files/inventory/juniper-devices.yaml
+
+templates:
+  - name: Render Netbox Configuration
+    project: Network Automation
+    job_type: run
+    playbook: render-netbox-configuration.yaml
+    inventory: Netbox Devices
+    ask_variables_on_launch: true
+    credentials: 
+      - GitHub (playbooks)
+      - Netbox

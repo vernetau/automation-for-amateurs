@@ -1,0 +1,23 @@
+{# Set intial vars #}
+{%- set classes = ['BE', 'EF', 'AF', 'NC'] -%}
+{%- set sorted_ips = dict() -%}
+{%- for this_device in dcim.Device.objects.filter(status__in=['active', 'staged'], device_type__manufacturer__name='Juniper').exclude(name=device.name) -%}
+    {%- set loopback_interface = this_device.interfaces.filter(name='lo0.0')[0] -%}{# Get our loopback interface via filter #}
+    {%- set loopback_ip = loopback_interface.ip_addresses.first().address.ip -%}{# Loopback IP will be the only IP assigned, get IP without mask #}
+    {%- set tmp = dict() -%}{# Temp dict for assignment to sorted_ips dict #}
+    {%- set device_label = this_device.name -%}{# Set label as hostname #}
+    {%- set _dummy = tmp.update({'ip':loopback_ip, 'device':device_label}) -%}{# Assign device/ip to dict #}
+    {%- set _dummy = sorted_ips.update({loopback_ip:tmp}) -%}{# Add indexed ip/device to final dict #}
+{%- endfor -%}
+{# Start configuration template #}
+protocols {
+    mpls {
+        {% for this_ip,device in sorted_ips|dictsort %}
+        {% for class in classes %}
+        label-switched-path {{ class }}-{{ device.device }} {
+            to {{ this_ip }};
+        }
+        {% endfor %}
+        {% endfor %}
+    }
+}

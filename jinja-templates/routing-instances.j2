@@ -1,0 +1,94 @@
+{# Set initial vars #}
+{%- set vpls = dict() -%}
+{%- set device_id = device.id -%}
+{%- set site_name = device.site -%}
+{# Loop through to get our info #}
+{%- for interface in device.interfaces.all() -%}
+    {# Check if the interface has a linked vpls #}
+    {%- if interface.l2vpn_termination is not none -%}
+        {# build our VPLS dict #}
+        {# To create our rd, we will need to take the route target and append our device id #}
+        {%- set rt = interface.l2vpn_termination.l2vpn.import_targets.all() -%}{# import/export target will be the same for vpls #}
+        {%- set rt = rt[0] -%}
+        {%- set rd = rt ~ device_id -%} {# create unique rd by appending the netbox device id #}
+        {# Check if the vpls has already been added to our array #}
+        {%- if vpls[interface.l2vpn_termination.l2vpn.name] is defined -%}
+            {%- set tmp = vpls[interface.l2vpn_termination.l2vpn.name] -%}
+        {%- else -%}
+            {# If we haven't already added our vpls instance, create an entry for it #}
+            {%- set tmp = dict() -%}
+            {%- set _dummy = tmp.update({'name':interface.l2vpn_termination.l2vpn.name}) -%}
+            {%- set _dummy = tmp.update({'description':interface.l2vpn_termination.l2vpn.description}) -%}
+            {%- set _dummy = tmp.update({'type':interface.l2vpn_termination.l2vpn.type}) -%}
+            {%- set _dummy = tmp.update({'route_distinguisher':rd}) -%}
+            {%- set _dummy = tmp.update({'route_target':rt}) -%}
+        {%- endif -%}
+        {# Add our interface and site arrays if not already present in the dict #}
+        {%- if tmp.interfaces is not defined -%}
+            {%- set _dummy = tmp.update({'interfaces':[]}) -%}
+        {%- endif -%}
+        {%- if tmp.sites is not defined -%}
+            {%- set _dummy = tmp.update({'sites':[]}) -%}
+        {%- endif -%}
+        {%- if tmp['interfaces'].append(interface.name) -%}
+        {%- endif -%}
+        {%- set site = dict() -%}
+        {%- set _dummy = site.update({'interface':interface.name}) -%}
+        {%- set _dummy = site.update({'auto_site_id':true}) -%}
+        {%- set _dummy = site.update({'site_name':site_name}) -%}
+        {%- if tmp['sites'].append(site) -%}
+        {%- endif -%}
+        {# add the dict to the vpls dict #}
+        {%- set _dummy = vpls.update({interface.l2vpn_termination.l2vpn.name:tmp}) -%}
+    {%- endif -%}
+{%- endfor -%}
+{# Start configuration template #}
+{% if vpls %}
+routing-instances {
+{% for this_inst in vpls %}
+    {% set this_inst_dict = vpls[this_inst] %}
+    {{ this_inst_dict.name }} {
+        instance-type vpls;
+        protocols {
+            vpls {
+                {% set tracker = dict() %}
+                {% for site in this_inst_dict.sites %}
+                    {% if tracker[site.site_name] is defined %}
+                        {% if tracker[site.site_name].append(loop.index-1) %}
+                        {% endif %}
+                    {% else %}
+                        {% set vtmp = [] %}
+                        {% if vtmp.append(loop.index-1) %}
+                        {% endif %}
+                        {% set _dummy = tracker.update({site.site_name:vtmp}) %}
+                    {% endif %}
+                {% endfor %}
+                {% for thissite, indexes in tracker|dictsort %}
+                site {{ this_inst_dict['sites'][indexes[0]].site_name}} {
+                    {% for index in indexes %}
+                    interface {{ this_inst_dict['sites'][index].interface }};
+                    {% endfor %}
+                    automatic-site-id;
+                }
+                {% endfor %}
+                connectivity-type ce;
+            }
+        }
+        {% if ' ' in this_inst_dict.description %}
+        description "{{ this_inst_dict.description }}";
+        {% elif this_inst_dict.description == '' %}
+        description "";
+        {% else %}
+        description {{ this_inst_dict.description }};
+        {% endif %}
+        {% for interface in this_inst_dict.interfaces %}
+        interface {{ interface }};
+        {% endfor %}
+        route-distinguisher {{ this_inst_dict.route_distinguisher }};
+        vrf-target target:{{ this_inst_dict.route_target }};
+    }
+{% endfor %}
+}
+{%- else -%}
+# No routing instances configured
+{%- endif -%}

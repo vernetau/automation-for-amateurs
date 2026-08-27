@@ -1,0 +1,255 @@
+sites:
+  - name: Melbourne 1
+    slug: melbourne-1
+  - name: Melbourne 2
+    slug: melbourne-2
+  - name: Sydney 1
+    slug: sydney-1
+  - name: Sydney 2
+    slug: sydney-2
+
+data_sources:
+  - name: Automation For Amateurs Github Repo
+    description: Example data source for the automation system
+    branch: master
+
+templates:
+  - name: Router
+    data_source: Jinja2 Templates
+    file: router.j2
+
+manufacturers:
+  - name: Juniper
+    slug: juniper
+
+device_types: 
+  - name: MX960
+    slug: mx960
+    manufacturer: juniper
+    u_height: 16
+
+roles:
+  - name: Router
+    slug: router
+    config_template: Router
+
+prefixes:
+  - prefix: 10.240.0.0/24
+    description: router-prefix
+  - prefix: 192.168.0.0/24
+    description: management-prefix
+  - prefix: 115.124.8.0/21
+    description: VERNet-prefix
+
+rirs:
+  - name: Private
+    slug: private
+    description: Private RIR
+
+asns:
+  - asn: 65000
+    description: Test ASN
+    rir: private
+
+route_targets:
+  - name: target:65000:100
+  - name: target:65000:200
+    
+devices:
+  - name: M1-Router-01
+    device_type: mx960
+    role: router
+    site: melbourne-1
+  - name: S1-Router-01
+    device_type: mx960
+    role: router
+    site: sydney-1
+  - name: M2-Router-01
+    device_type: mx960
+    role: router
+    site: melbourne-2
+  - name: S2-Router-01
+    device_type: mx960
+    role: router
+    site: sydney-2
+
+interfaces:
+  - device: M1-Router-01
+    name: lo0
+    type: virtual
+  - device: M1-Router-01
+    name: lo0.0
+    type: virtual
+    parent: lo0
+    description: loopback interface
+  - device: M1-Router-01
+    name: fxp0
+    type: 1000base-t
+  - device: M1-Router-01
+    name: fxp0.0
+    type: virtual
+    parent: fxp0
+    description: management interface
+  - device: M1-Router-01
+    name: ge-0/0/0
+    type: 1000base-t
+    mtu: 1514
+  - device: M1-Router-01
+    name: ge-0/0/0.0
+    type: virtual
+    description: customer internet
+    parent: ge-0/0/0
+  - device: M1-Router-01
+    name: xe-10/0/0
+    type: 10gbase-x-sfpp
+    mtu: 9192
+  - device: M1-Router-01
+    name: xe-10/0/0.0
+    type: virtual
+    description: customer vpls-1 tail 1
+    parent: xe-10/0/0
+
+  - device: S1-Router-01
+    name: lo0
+    type: virtual
+  - device: S1-Router-01
+    name: lo0.0
+    type: virtual
+    parent: lo0
+    description: loopback interface
+  - device: S1-Router-01
+    name: fxp0
+    type: 1000base-t
+  - device: S1-Router-01
+    name: fxp0.0
+    type: virtual
+    parent: fxp0
+    description: management interface
+  - device: S1-Router-01
+    name: xe-10/0/0
+    type: 10gbase-x-sfpp
+    mtu: 9192
+  - device: S1-Router-01
+    name: xe-10/0/0.0
+    type: virtual
+    parent: xe-10/0/0
+    description: customer vpls-1 tail 2
+
+  - device: M2-Router-01
+    name: lo0
+    type: virtual
+  - device: M2-Router-01
+    name: lo0.0
+    type: virtual
+    parent: lo0
+    description: loopback interface
+  - device: M2-Router-01
+    name: fxp0
+    type: 1000base-t
+  - device: M2-Router-01
+    name: fxp0.0
+    type: virtual
+    parent: fxp0
+    description: management interface
+  - device: M2-Router-01
+    name: ge-0/0/0
+    type: 1000base-t
+    mtu: 1514
+  - device: M2-Router-01
+    name: ge-0/0/0.0
+    type: virtual
+    description: customer vpls-2 tail 1
+    parent: ge-0/0/0
+
+  - device: S2-Router-01
+    name: lo0
+    type: virtual
+  - device: S2-Router-01
+    name: lo0.0
+    type: virtual
+    parent: lo0
+    description: loopback interface
+  - device: S2-Router-01
+    name: fxp0
+    type: 1000base-t
+  - device: S2-Router-01
+    name: fxp0.0
+    type: virtual
+    parent: fxp0
+    description: management interface
+  - device: S2-Router-01
+    name: ge-0/0/0
+    type: 1000base-t
+    mtu: 1514
+  - device: S2-Router-01
+    name: ge-0/0/0.0
+    type: virtual
+    parent: ge-0/0/0
+    description: customer vpls-2 tail 2
+
+l2vpns:
+  - name: vpls-1
+    slug: vpls-1
+    description: Test vpls-1
+    type: vpls
+    import_targets:
+      - target:65000:100
+    export_targets:
+      - target:65000:100
+  - name: vpls-2
+    slug: vpls-2
+    description: Test vpls-2
+    type: vpls
+    import_targets:
+      - target:65000:200
+    export_targets:
+      - target:65000:200
+
+l2vpn_terminations:
+  - l2vpn: vpls-1
+    device: M1-Router-01
+    interface: xe-10/0/0.0
+  - l2vpn: vpls-1
+    device: S1-Router-01
+    interface: xe-10/0/0.0
+  - l2vpn: vpls-2
+    device: M2-Router-01
+    interface: ge-0/0/0.0
+  - l2vpn: vpls-2
+    device: S2-Router-01
+    interface: ge-0/0/0.0
+
+ip_addresses:
+  - address: 10.240.0.1/32
+    device: M1-Router-01
+    interface: lo0.0
+  - address: 10.240.0.2/32
+    device: M2-Router-01
+    interface: lo0.0
+  - address: 10.240.0.3/32
+    device: S1-Router-01
+    interface: lo0.0
+  - address: 10.240.0.4/32
+    device: S2-Router-01
+    interface: lo0.0
+
+  - address: 192.168.0.1/32
+    device: M1-Router-01
+    interface: fxp0.0
+    is_primary: true
+  - address: 192.168.0.2/32
+    device: M2-Router-01
+    interface: fxp0.0
+    is_primary: true
+  - address: 192.168.0.3/32
+    device: S1-Router-01
+    interface: fxp0.0
+    is_primary: true
+  - address: 192.168.0.4/32
+    device: S2-Router-01
+    interface: fxp0.0
+    is_primary: true
+
+  - address: 115.124.8.1/32
+    device: M1-Router-01
+    interface: ge-0/0/0.0

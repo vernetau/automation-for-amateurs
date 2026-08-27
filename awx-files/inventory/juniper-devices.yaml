@@ -1,0 +1,12 @@
+## Ansible Plugin file for dynamic Juniper inventory through netbox
+
+## The Netbox plugin nb_inventory is used to pull the device inventory from Netbox, 
+## with a filter for only Junos devices. 
+---
+plugin: netbox.netbox.nb_inventory
+validate_certs: false # Change this for production
+compose:
+  ansible_network_os: platform.slug
+device_query_filters:
+  - manufacturer_id: 1 # Will be the Juniper ID as this is the first one created via the install script
+  - status: active

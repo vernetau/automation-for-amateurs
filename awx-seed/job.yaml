@@ -1,0 +1,103 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: awx-seed
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 30
+
+  template:
+    metadata:
+      labels:
+        app: awx-seed
+
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: awx-seed
+          image: python:3.12-slim
+
+          env:
+            - name: AWX_URL
+              value: "http://awx-service:80"
+
+            - name: NETBOX_URL
+              value: "http://netbox:80"
+
+            - name: AWX_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: awx-api
+                  key: token
+
+            - name: NETBOX_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: netbox-api
+                  key: token
+
+            - name: GIT_ORGANIZATION
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: organization
+
+            - name: GIT_REPOSITORY
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: repository
+
+            - name: GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: username
+
+            - name: GIT_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: email
+
+            - name: GIT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: git-credentials
+                  key: token
+
+            - name: DEVICE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: device-credentials
+                  key: username
+
+            - name: DEVICE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: device-credentials
+                  key: password
+
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              echo "Installing Python dependencies..."
+              pip install --quiet requests pynetbox pyyaml
+
+              echo "Running seed script..."
+              python /awx-seed/seed.py
+
+              echo "AWX seed completed successfully."
+
+          volumeMounts:
+            - name: seed
+              mountPath: /awx-seed
+
+      volumes:
+        - name: seed
+          configMap:
+            name: awx-seed

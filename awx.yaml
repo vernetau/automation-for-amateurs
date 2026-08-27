@@ -1,0 +1,9 @@
+apiVersion: awx.ansible.com/v1beta1
+kind: AWX
+metadata:
+  name: awx
+  namespace: automation-for-amateurs
+spec:
+  admin_password_secret: awx-admin-password
+  secret_key_secret: awx-secret-key
+  service_type: ClusterIP
