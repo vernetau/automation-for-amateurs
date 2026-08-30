@@ -9,6 +9,12 @@ for bin in kubectl helm python3; do
     command -v "$bin" >/dev/null 2>&1 || { echo "Missing required tool: $bin" >&2; exit 1; }
 done
 
+# Check if git.env was provided, fail if not
+if [ ! -f git.env ]; then
+    echo "git.env not found, please create this first before continuing"
+    exit 1
+fi
+
 # Set namespace, default to "automationForAmateurs"
 NAMESPACE="${NAMESPACE:-automation-for-amateurs}"
 
